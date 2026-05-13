@@ -71,7 +71,12 @@
     antialias: true
   });
 
-  const renderer = new THREE.WebGLRenderer({ alpha: true });
+  const renderer = new THREE.WebGLRenderer({ 
+  alpha: true,
+  antialias: true,
+  premultipliedAlpha: false  // ← это убирает грязные цвета при наложении
+  });
+  renderer.sortObjects = true; // ← рендерить от большего к меньшему
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.domElement.classList.add('threejs-layer');
   document.body.appendChild(renderer.domElement);
@@ -111,14 +116,26 @@
     const zoom = map.getZoom();
     const radiusPixels = metersToPixelsAtLat(radiusMeters, lat, zoom);
 
-    const geometry = new THREE.SphereGeometry(radiusPixels, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
-    const material = new THREE.MeshStandardMaterial({
+    const geometry = new THREE.SphereGeometry(
+      radiusPixels,
+      64,          // ← больше сегментов = плавнее купол
+      32,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI / 2  // половина сферы — это правильно, оставить
+    );
+    const material = new THREE.MeshPhongMaterial({
       color: getColorByLayerIndex(layerIndex),
       transparent: true,
-      opacity: 0.6
+      opacity: 0.45,
+      depthWrite: false,        // ← ключевое! убирает артефакты перекрытия
+      side: THREE.FrontSide,
+      blending: THREE.NormalBlending
     });
 
     const dome = new THREE.Mesh(geometry, material);
+    dome.rotation.x = Math.PI;
     dome.userData = {
       lon: coords[0],
       lat: coords[1],
@@ -143,11 +160,12 @@
         const screen = map.project([lon, lat]);
         const dx = screen.x - window.innerWidth / 2;
         const dy = -(screen.y - window.innerHeight / 2);
+        const pixelRadius = metersToPixelsAtLat(radiusMeters, lat, zoom);
         dome.position.set(dx, dy, 0);
 
         const pixelRadius = metersToPixelsAtLat(radiusMeters, lat, zoom);
         const scale = pixelRadius / dome.geometry.parameters.radius;
-        dome.scale.set(scale, scale, scale);
+        dome.scale.set(scale, scale, scale* 0.6);
       });
     });
   }
